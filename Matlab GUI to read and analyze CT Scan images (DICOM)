@@ -1,0 +1,122 @@
+% Matlab GUI code to read and analyze CT Scan image (DICOM)
+% This code is provided by Dr. Goan 
+% https://www.academicblock.com
+% https://www.academicblock.com/technology/web-tools
+
+
+function dicomImageEditor
+    % Create a figure window
+    fig = figure('Name', 'DICOM Image Editor', 'NumberTitle', 'off', ...
+                 'MenuBar', 'none', 'ToolBar', 'none', 'Position', [100, 100, 800, 600]);
+
+    % Add a panel for the image
+    imgPanel = uipanel('Parent', fig, 'Position', [0.1 0.2 0.8 0.7]);
+
+    % Add an axis to display the image
+    ax = axes('Parent', imgPanel);
+
+    % Add a button to upload a DICOM image
+    uploadButton = uicontrol('Style', 'pushbutton', 'String', 'Upload DICOM Image', ...
+                             'Position', [50, 30, 150, 30], 'Callback', @uploadImage);
+
+    % Add a slider to resize the image
+    resizeSlider = uicontrol('Style', 'slider', 'Min', 0.2, 'Max', 2, 'Value', 1, ...
+                             'Position', [250, 70, 300, 20], 'Callback', @resizeImage);
+    
+    % Add a text label for the resize slider
+    resizeLabel = uicontrol('Style', 'text', 'Position', [250, 90, 300, 20], ...
+                            'String', 'Resize Image (20% to 200%)');
+    
+    % Add a slider to adjust the brightness
+    brightnessSlider = uicontrol('Style', 'slider', 'Min', -1, 'Max', 1, 'Value', 0, ...
+                                 'Position', [250, 40, 300, 20], 'Callback', @adjustBrightness);
+    
+    % Add a text label for the brightness slider
+    brightnessLabel = uicontrol('Style', 'text', 'Position', [250, 60, 300, 20], ...
+                                'String', 'Adjust Brightness');
+
+    % Add a slider to zoom in and out
+    zoomSlider = uicontrol('Style', 'slider', 'Min', 1, 'Max', 10, 'Value', 1, ...
+                           'Position', [250, 10, 300, 20], 'Callback', @zoomImage);
+    
+    % Add a text label for the zoom slider
+    zoomLabel = uicontrol('Style', 'text', 'Position', [250, 30, 300, 20], ...
+                          'String', 'Zoom In/Out (1x to 10x)');
+    
+    % Add a button to save the edited image
+    saveButton = uicontrol('Style', 'pushbutton', 'String', 'Save Image', ...
+                           'Position', [600, 30, 100, 30], 'Callback', @saveImage);
+
+    % Initialize variables to store the original and modified image
+    img = [];
+    resizedImg = [];
+    brightnessAdjustedImg = [];
+    zoomedImg = [];
+
+    function uploadImage(~, ~)
+        % Let the user select a DICOM file
+        [fileName, pathName] = uigetfile({'*.dcm', 'DICOM Files (*.dcm)'}, 'Select a DICOM Image');
+        if fileName == 0
+            return;
+        end
+        imgPath = fullfile(pathName, fileName);
+        img = dicomread(imgPath);
+        img = mat2gray(img); % Normalize image to range [0, 1]
+        resizedImg = img; % Initially, resized image is the same as original
+        brightnessAdjustedImg = img; % Initially, brightness-adjusted image is the same as original
+        zoomedImg = img; % Initially, zoomed image is the same as original
+        imshow(img, 'Parent', ax);
+        title(ax, 'Uploaded DICOM Image');
+    end
+
+    function resizeImage(~, ~)
+        if isempty(img)
+            return;
+        end
+        scaleFactor = get(resizeSlider, 'Value');
+        resizedImg = imresize(img, scaleFactor);
+        applyAdjustments();
+    end
+
+    function adjustBrightness(~, ~)
+        if isempty(img)
+            return;
+        end
+        brightnessFactor = get(brightnessSlider, 'Value');
+        brightnessAdjustedImg = imadjust(resizedImg, [], [], 1, [brightnessFactor brightnessFactor]);
+        applyAdjustments();
+    end
+
+    function zoomImage(~, ~)
+        if isempty(img)
+            return;
+        end
+        zoomFactor = get(zoomSlider, 'Value');
+        [h, w] = size(brightnessAdjustedImg);
+        centerX = round(w / 2);
+        centerY = round(h / 2);
+        cropSize = round(min(h, w) / zoomFactor);
+        xRange = max(1, centerX - cropSize):min(w, centerX + cropSize);
+        yRange = max(1, centerY - cropSize):min(h, centerY + cropSize);
+        zoomedImg = brightnessAdjustedImg(yRange, xRange);
+        imshow(zoomedImg, 'Parent', ax);
+        title(ax, sprintf('Zoomed Image (%.1fx)', zoomFactor));
+    end
+
+    function applyAdjustments()
+        brightnessFactor = get(brightnessSlider, 'Value');
+        brightnessAdjustedImg = imadjust(resizedImg, [], [], 1, [brightnessFactor brightnessFactor]);
+        zoomImage();
+    end
+
+    function saveImage(~, ~)
+        if isempty(zoomedImg)
+            return;
+        end
+        [fileName, pathName] = uiputfile({'*.jpg', 'JPEG Image'; '*.png', 'PNG Image'; '*.bmp', 'Bitmap Image'}, 'Save Image As');
+        if fileName == 0
+            return;
+        end
+        imwrite(zoomedImg, fullfile(pathName, fileName));
+    end
+end
